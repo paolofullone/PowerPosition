@@ -25,15 +25,31 @@ namespace PowerPosition.Worker
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation(
-                "Using interval: {IntervalMinutes} minute(s) at Utc: {UtcTime} (Local: {LocalTime})",
+                "Using interval: {IntervalMinutes} minute(s) at Utc: {UtcTime} (Europe/London: {LocalTime})",
                 _interval.TotalMinutes, _utcNow, _londonNow
                 );
 
-            while (!stoppingToken.IsCancellationRequested)
+            await _service.GenerateReportAsync(stoppingToken);
+
+            using PeriodicTimer timer = await ScheduledExecutions(stoppingToken);
+        }
+
+        private async Task<PeriodicTimer> ScheduledExecutions(CancellationToken stoppingToken)
+        {
+            var timer = new PeriodicTimer(_interval);
+            while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
             {
-                _logger.LogInformation("Power Worker running with interval of {interval} minute(s)", _interval.TotalMinutes);
-                await _service.GenerateReportAsync(stoppingToken);
+                try
+                {
+                    await _service.GenerateReportAsync(stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unexpected error during extract");
+                }
             }
+
+            return timer;
         }
     }
 }
