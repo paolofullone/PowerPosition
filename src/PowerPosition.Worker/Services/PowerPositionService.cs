@@ -25,5 +25,20 @@ public class PowerPositionService : IPowerPositionService
         _logger.LogInformation(
             "Generate report async at Utc: {UtcTime} (Europe/London: {LocalTime}",
             utcNow, londonNow);
+
+        var londonReportDate = londonNow.Date;
+
+        IEnumerable<PowerTrade> trades;
+        try
+        {
+            trades = await _powerService.GetTradesAsync(londonReportDate);
+            _logger.LogInformation("Trades count for date {londonReportDate}: {tradesCount}", londonReportDate, trades.Count());
+        }
+        catch (PowerServiceException ex)
+        {
+            _logger.LogError(ex, "PowerService failed for date {ReportDate}. Message: {ErrorMessage}",
+                londonReportDate, ex.Message);
+            return;
+        }
     }
 }
