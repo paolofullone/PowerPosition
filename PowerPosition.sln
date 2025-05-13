@@ -1,13 +1,20 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.13.35828.75 d17.13
+VisualStudioVersion = 17.13.35828.75
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{5C89F280-7C4A-4D84-9051-1F55EE797A62}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerPosition.Worker", "src\PowerPosition.Worker\PowerPosition.Worker.csproj", "{53C02050-D780-4B74-9415-C54C9046F82D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "lib", "lib", "{8D207C1D-246A-403D-825E-7DF985B61113}"
+	ProjectSection(SolutionItems) = preProject
+		src\lib\PowerService.deps.json = src\lib\PowerService.deps.json
+		src\lib\PowerService.dll = src\lib\PowerService.dll
+		src\lib\PowerService.pdb = src\lib\PowerService.pdb
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -25,6 +32,7 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{53C02050-D780-4B74-9415-C54C9046F82D} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{8D207C1D-246A-403D-825E-7DF985B61113} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {B41A02D4-3A23-45E2-8C46-29CDCBA9D82B}
