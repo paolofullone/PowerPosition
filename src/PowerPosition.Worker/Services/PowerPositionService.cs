@@ -33,7 +33,6 @@ public class PowerPositionService : IPowerPositionService
         try
         {
             trades = await ResilientGetTradesAsync(londonReportDate, cancellationToken);
-            //_logger.LogInformation("Trades count for date {londonReportDate}: {tradesCount}", londonReportDate, trades.Count());
         }
         catch (PowerServiceException ex)
         {
