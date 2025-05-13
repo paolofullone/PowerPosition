@@ -1,6 +1,6 @@
 ﻿namespace PowerPosition.Worker.Constants
 {
-    public static class Constants
+    public static class PowerPositionConstants
     {
         public const string settingsInterval = "PowerPosition:IntervalInMinutes";
         public const int defaultInterval = 60;
