@@ -7,9 +7,7 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddHostedService<Worker>();
 
-var interval = TimeSpan.FromMinutes(builder.Configuration.GetValue<int>(Constants.settingsInterval, Constants.defaultInterval));
-
-var outputFolder = builder.Configuration.GetValue<string>(Constants.settingsOutputFolder);
+var outputFolder = builder.Configuration.GetValue<string>(PowerPositionConstants.settingsOutputFolder);
 
 builder.Services.AddSingleton<IPowerPositionService, PowerPositionService>();
 builder.Services.AddSingleton<IPowerService, PowerService>();
