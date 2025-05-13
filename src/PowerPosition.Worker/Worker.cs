@@ -25,7 +25,7 @@ namespace PowerPosition.Worker
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation(
-                "Using interval: {IntervalMinutes} minute(s) at Utc: {UtcTime} (Europe/London: {LocalTime})",
+                "Using interval: {IntervalMinutes} minute(s) starting execute at Utc: {UtcTime} (Europe/London: {LocalTime})",
                 _interval.TotalMinutes, _utcNow, _londonNow
                 );
 
