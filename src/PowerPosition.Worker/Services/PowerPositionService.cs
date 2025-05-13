@@ -33,7 +33,6 @@ public class PowerPositionService : IPowerPositionService
         try
         {
             trades = await ResilientGetTradesAsync(londonReportDate, cancellationToken);
-            //_logger.LogInformation("Trades count for date {londonReportDate}: {tradesCount}", londonReportDate, trades.Count());
         }
         catch (PowerServiceException ex)
         {
@@ -41,6 +40,25 @@ public class PowerPositionService : IPowerPositionService
                 londonReportDate, ex.Message);
             return;
         }
+
+        var aggregatedVolumes = AggregateVolumes(trades);
+    }
+
+    private static double[] AggregateVolumes(IEnumerable<PowerTrade> trades)
+    {
+        var volumes = new double[24];
+        foreach (var trade in trades)
+        {
+            foreach (var period in trade.Periods)
+            {
+                int periodIndex = period.Period - 1;
+                if (periodIndex >= 0 && periodIndex < 24)
+                {
+                    volumes[periodIndex] += period.Volume;
+                }
+            }
+        }
+        return volumes;
     }
 
     private async Task<IEnumerable<PowerTrade>> ResilientGetTradesAsync(DateTime date, CancellationToken cancellationToken)
