@@ -1,4 +1,6 @@
 ﻿using Axpo;
+using Microsoft.Extensions.Options;
+using PowerPosition.Worker.Configuration;
 using PowerPosition.Worker.Constants;
 using System.Text;
 
@@ -8,42 +10,44 @@ public class PowerPositionService : IPowerPositionService
 {
     private readonly IPowerService _powerService;
     private readonly ILogger<PowerPositionService> _logger;
+    IOptions<PowerPositionSettings> _settings;
     private readonly string _outputFolder;
-    private readonly TimeZoneInfo _londonTimeZone;
+    private readonly TimeZoneInfo _localTimeZone;
 
-    public PowerPositionService(IPowerService powerService, ILogger<PowerPositionService> logger, string outputFolder)
+    public PowerPositionService(IPowerService powerService, ILogger<PowerPositionService> logger, IOptions<PowerPositionSettings> settings)
     {
         _powerService = powerService;
         _logger = logger;
-        _outputFolder = outputFolder;
-        _londonTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/London");
+        _outputFolder = settings.Value.OutputFolder;
+        _settings = settings;
+        _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
         Directory.CreateDirectory(_outputFolder);
     }
 
     public async Task GenerateReportAsync(CancellationToken cancellationToken)
     {
         var utcNow = DateTime.UtcNow;
-        var londonNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, _londonTimeZone);
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, _localTimeZone);
 
         _logger.LogInformation(
-            "Generate report async at Utc: {UtcTime} (Europe/London: {LocalTime}",
-            utcNow, londonNow);
+            "Generate report async at Utc: {UtcTime} ({LocalZone}: {LocalTime})",
+            utcNow, _settings.Value.LocalTimeZone, localNow);
 
-        var londonReportDate = londonNow.Date;
+        var localReportDate = localNow.Date;
 
         IEnumerable<PowerTrade> trades;
         try
         {
-            trades = await ResilientGetTradesAsync(londonReportDate, cancellationToken);
+            trades = await ResilientGetTradesAsync(localReportDate, cancellationToken);
 
             var aggregatedVolumes = AggregateVolumes(trades);
 
-            await WriteCsvAsync(londonNow, aggregatedVolumes, cancellationToken);
+            await WriteCsvAsync(localNow, aggregatedVolumes, cancellationToken);
         }
         catch (PowerServiceException ex)
         {
             _logger.LogError(ex, "PowerService failed for date {ReportDate}. Message: {ErrorMessage}",
-                londonReportDate, ex.Message);
+                localReportDate, ex.Message);
             return;
         }
     }
@@ -89,9 +93,9 @@ public class PowerPositionService : IPowerPositionService
         throw new PowerServiceException(errorMessage);
     }
 
-    private async Task WriteCsvAsync(DateTime londonNow, double[] volumes, CancellationToken cancellationToken)
+    private async Task WriteCsvAsync(DateTime localNow, double[] volumes, CancellationToken cancellationToken)
     {
-        var fileName = $"PowerPosition_{londonNow:yyyyMMdd_HHmm}.csv";
+        var fileName = $"PowerPosition_{localNow:yyyyMMdd_HHmm}.csv";
 
         var filePath = Path.Combine(_outputFolder, fileName);
 
@@ -111,6 +115,6 @@ public class PowerPositionService : IPowerPositionService
 
         _logger.LogInformation(
             "Extract completed, CSV written to {FilePath} at {UtcTime} (Local: {LocalTime})",
-            filePath, DateTime.UtcNow, TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _londonTimeZone));
+            filePath, DateTime.UtcNow, TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _localTimeZone));
     }
 }

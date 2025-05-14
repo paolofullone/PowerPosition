@@ -1,4 +1,5 @@
-using PowerPosition.Worker.Constants;
+using Microsoft.Extensions.Options;
+using PowerPosition.Worker.Configuration;
 using PowerPosition.Worker.Services;
 
 namespace PowerPosition.Worker
@@ -7,26 +8,28 @@ namespace PowerPosition.Worker
     {
         private readonly IPowerPositionService _service;
         private readonly ILogger<Worker> _logger;
+        IOptions<PowerPositionSettings> _settings;
         private readonly TimeSpan _interval;
-        private readonly TimeZoneInfo _londonTimeZone;
+        private readonly TimeZoneInfo _localTimeZone;
         private readonly DateTime _utcNow;
-        private readonly DateTime _londonNow;
+        private readonly DateTime _localNow;
 
-        public Worker(IPowerPositionService service, ILogger<Worker> logger, IConfiguration configuration)
+        public Worker(IPowerPositionService service, ILogger<Worker> logger, IOptions<PowerPositionSettings> settings, IConfiguration configuration)
         {
             _service = service;
             _logger = logger;
-            _londonTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/London");
+            _settings = settings;
+            _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
             _utcNow = DateTime.UtcNow;
-            _londonNow = TimeZoneInfo.ConvertTimeFromUtc(_utcNow, _londonTimeZone);
-            _interval = TimeSpan.FromMinutes(configuration.GetValue<int>(PowerPositionConstants.settingsInterval));
+            _localNow = TimeZoneInfo.ConvertTimeFromUtc(_utcNow, _localTimeZone);
+            _interval = TimeSpan.FromMinutes(settings.Value.IntervalInMinutes);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation(
-                "Using interval: {IntervalMinutes} minute(s) starting execute at Utc: {UtcTime} (Europe/London: {LocalTime})",
-                _interval.TotalMinutes, _utcNow, _londonNow
+                "Using interval: {IntervalMinutes} minute(s) starting execute at Utc: {UtcTime} ({LocalZone}: {LocalTime})",
+                _interval.TotalMinutes, _utcNow, _settings.Value.LocalTimeZone, _localNow
                 );
 
             await _service.GenerateReportAsync(stoppingToken);
