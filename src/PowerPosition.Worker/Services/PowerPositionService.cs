@@ -1,5 +1,6 @@
 ﻿using Axpo;
 using PowerPosition.Worker.Constants;
+using System.Text;
 
 namespace PowerPosition.Worker.Services;
 
@@ -16,6 +17,7 @@ public class PowerPositionService : IPowerPositionService
         _logger = logger;
         _outputFolder = outputFolder;
         _londonTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/London");
+        Directory.CreateDirectory(_outputFolder);
     }
 
     public async Task GenerateReportAsync(CancellationToken cancellationToken)
@@ -33,6 +35,10 @@ public class PowerPositionService : IPowerPositionService
         try
         {
             trades = await ResilientGetTradesAsync(londonReportDate, cancellationToken);
+
+            var aggregatedVolumes = AggregateVolumes(trades);
+
+            await WriteCsvAsync(londonNow, aggregatedVolumes, cancellationToken);
         }
         catch (PowerServiceException ex)
         {
@@ -40,8 +46,6 @@ public class PowerPositionService : IPowerPositionService
                 londonReportDate, ex.Message);
             return;
         }
-
-        var aggregatedVolumes = AggregateVolumes(trades);
     }
 
     private static double[] AggregateVolumes(IEnumerable<PowerTrade> trades)
@@ -52,7 +56,7 @@ public class PowerPositionService : IPowerPositionService
             foreach (var period in trade.Periods)
             {
                 int periodIndex = period.Period - 1;
-                if (periodIndex >= 0 && periodIndex < 24)
+                if (periodIndex >= 0 && periodIndex <= 23)
                 {
                     volumes[periodIndex] += period.Volume;
                 }
@@ -83,5 +87,30 @@ public class PowerPositionService : IPowerPositionService
             ? "Operation canceled after multiple retry attempts"
             : $"Max retries ({PowerPositionConstants.maxGetTradesRetries}) reached";
         throw new PowerServiceException(errorMessage);
+    }
+
+    private async Task WriteCsvAsync(DateTime londonNow, double[] volumes, CancellationToken cancellationToken)
+    {
+        var fileName = $"PowerPosition_{londonNow:yyyyMMdd_HHmm}.csv";
+
+        var filePath = Path.Combine(_outputFolder, fileName);
+
+        var stringBuilder = new StringBuilder();
+
+        stringBuilder.AppendLine("Local Time, Volume");
+
+        for (int period = 1; period <= 24; period++)
+        {
+            var hour = (period == 1) ? 23 : (period - 2);
+            var time = $"{hour}:00";
+            var volume = volumes[period - 1];
+            stringBuilder.AppendLine($"{time},{volume}");
+        }
+
+        await File.WriteAllTextAsync(filePath, stringBuilder.ToString(), cancellationToken);
+
+        _logger.LogInformation(
+            "Extract completed, CSV written to {FilePath} at {UtcTime} (Local: {LocalTime})",
+            filePath, DateTime.UtcNow, TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _londonTimeZone));
     }
 }
