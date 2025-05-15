@@ -3,9 +3,8 @@
     public class PowerPositionConstants
     {
         public const string settingsInterval = "PowerPosition:IntervalInMinutes";
-        public const int defaultInterval = 60;
+        public const int defaultIntervalInMinutes = 60;
         public const string settingsOutputFolder = "PowerPosition:OutputFolder";
-        public const int retryDelayMiliseconds = 100;
-        public const int maxGetTradesRetries = 5;
+        public const int defaultDelayMiliseconds = 500;
     }
 }
