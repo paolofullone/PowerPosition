@@ -6,32 +6,33 @@ using System.Text;
 
 namespace PowerPosition.Worker.Services;
 
-public class PowerPositionService : IPowerPositionService
+public class PowerPositionService(
+    IPowerService powerService,
+    ILogger<PowerPositionService> logger,
+    IOptions<PowerPositionSettings> settings
+    ) : IPowerPositionService
 {
-    private readonly IPowerService _powerService;
-    private readonly ILogger<PowerPositionService> _logger;
-    IOptions<PowerPositionSettings> _settings;
-    private readonly string _outputFolder;
-    private readonly TimeZoneInfo _localTimeZone;
-
-    public PowerPositionService(IPowerService powerService, ILogger<PowerPositionService> logger, IOptions<PowerPositionSettings> settings)
+    private static string EnsureDirectory(string path)
     {
-        _powerService = powerService;
-        _logger = logger;
-        _outputFolder = settings.Value.OutputFolder;
-        _settings = settings;
-        _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
-        Directory.CreateDirectory(_outputFolder);
+        Directory.CreateDirectory(path);
+        return path;
     }
 
+    private readonly string _outputFolder = EnsureDirectory(settings.Value.OutputFolder);
+    private readonly TimeZoneInfo _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
+    private readonly string _localTimeZoneId = settings.Value.LocalTimeZone;
+
+    /// <summary>
+    /// Generates the power position report and writes it to a CSV file.
+    /// </summary>
     public async Task GenerateReportAsync(CancellationToken cancellationToken)
     {
         var utcNow = DateTime.UtcNow;
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, _localTimeZone);
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Generate report async at Utc: {UtcTime} ({LocalZone}: {LocalTime})",
-            utcNow, _settings.Value.LocalTimeZone, localNow);
+            utcNow, _localTimeZoneId, localNow);
 
         var localReportDate = localNow.Date;
 
@@ -39,16 +40,13 @@ public class PowerPositionService : IPowerPositionService
         try
         {
             trades = await ResilientGetTradesAsync(localReportDate, cancellationToken);
-
             var aggregatedVolumes = AggregateVolumes(trades);
-
             await WriteCsvAsync(localNow, aggregatedVolumes, cancellationToken);
         }
         catch (PowerServiceException ex)
         {
-            _logger.LogError(ex, "PowerService failed for date {ReportDate}. Message: {ErrorMessage}",
+            logger.LogError(ex, "PowerService failed for date {ReportDate}. Message: {ErrorMessage}",
                 localReportDate, ex.Message);
-            return;
         }
     }
 
@@ -76,12 +74,12 @@ public class PowerPositionService : IPowerPositionService
         {
             try
             {
-                return await _powerService.GetTradesAsync(date);
+                return await powerService.GetTradesAsync(date);
             }
             catch (PowerServiceException ex)
             {
                 double retryDelayMs = PowerPositionConstants.retryDelayMiliseconds * Math.Pow(2, retryCount - 1);
-                _logger.LogWarning(ex, "Retry {RetryCount} for PowerServiceException after {RetryDelayMs}ms. Message: {ErrorMessage}",
+                logger.LogWarning(ex, "Retry {RetryCount} for PowerServiceException after {RetryDelayMs}ms. Message: {ErrorMessage}",
                     retryCount, retryDelayMs, ex.Message);
                 await Task.Delay(TimeSpan.FromMilliseconds(retryDelayMs), cancellationToken);
                 retryCount++;
@@ -96,25 +94,30 @@ public class PowerPositionService : IPowerPositionService
     private async Task WriteCsvAsync(DateTime localNow, double[] volumes, CancellationToken cancellationToken)
     {
         var fileName = $"PowerPosition_{localNow:yyyyMMdd_HHmm}.csv";
-
         var filePath = Path.Combine(_outputFolder, fileName);
+        var csvContent = BuildCsvContent(volumes);
 
+        await File.WriteAllTextAsync(filePath, csvContent, cancellationToken);
+
+        logger.LogInformation(
+            "Extract completed, CSV written to {FilePath} at {UtcTime} (Local: {LocalTime})",
+            filePath, DateTime.UtcNow, TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _localTimeZone));
+    }
+
+    private static string BuildCsvContent(double[] volumes)
+    {
+        var delimiter = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ListSeparator;
         var stringBuilder = new StringBuilder();
-
-        stringBuilder.AppendLine("Local Time, Volume");
+        stringBuilder.AppendLine($"Local Time{delimiter}Volume");
 
         for (int period = 1; period <= 24; period++)
         {
             var hour = (period == 1) ? 23 : (period - 2);
             var time = $"{hour}:00";
-            var volume = volumes[period - 1];
-            stringBuilder.AppendLine($"{time},{volume}");
+            var volume = Math.Round(volumes[period - 1], 2);
+            stringBuilder.AppendLine($"{time}{delimiter}{volume}");
         }
 
-        await File.WriteAllTextAsync(filePath, stringBuilder.ToString(), cancellationToken);
-
-        _logger.LogInformation(
-            "Extract completed, CSV written to {FilePath} at {UtcTime} (Local: {LocalTime})",
-            filePath, DateTime.UtcNow, TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _localTimeZone));
+        return stringBuilder.ToString();
     }
 }

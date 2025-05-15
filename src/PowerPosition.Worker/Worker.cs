@@ -4,35 +4,27 @@ using PowerPosition.Worker.Services;
 
 namespace PowerPosition.Worker
 {
-    public class Worker : BackgroundService
+    public class Worker(
+        IPowerPositionService service,
+        ILogger<Worker> logger,
+        IOptions<PowerPositionSettings> settings
+        ) : BackgroundService
     {
-        private readonly IPowerPositionService _service;
-        private readonly ILogger<Worker> _logger;
-        IOptions<PowerPositionSettings> _settings;
-        private readonly TimeSpan _interval;
-        private readonly TimeZoneInfo _localTimeZone;
-        private readonly DateTime _utcNow;
-        private readonly DateTime _localNow;
 
-        public Worker(IPowerPositionService service, ILogger<Worker> logger, IOptions<PowerPositionSettings> settings, IConfiguration configuration)
-        {
-            _service = service;
-            _logger = logger;
-            _settings = settings;
-            _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
-            _utcNow = DateTime.UtcNow;
-            _localNow = TimeZoneInfo.ConvertTimeFromUtc(_utcNow, _localTimeZone);
-            _interval = TimeSpan.FromMinutes(settings.Value.IntervalInMinutes);
-        }
+        private readonly TimeSpan _interval = TimeSpan.FromMinutes(settings.Value.IntervalInMinutes);
+        private readonly TimeZoneInfo _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
+        private readonly string _localTimeZoneId = settings.Value.LocalTimeZone;
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation(
+            var utcNow = DateTime.UtcNow;
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, _localTimeZone);
+            logger.LogInformation(
                 "Using interval: {IntervalMinutes} minute(s) starting execute at Utc: {UtcTime} ({LocalZone}: {LocalTime})",
-                _interval.TotalMinutes, _utcNow, _settings.Value.LocalTimeZone, _localNow
+                _interval.TotalMinutes, utcNow, _localTimeZoneId, localNow
                 );
 
-            await _service.GenerateReportAsync(stoppingToken);
+            await service.GenerateReportAsync(stoppingToken);
 
             using PeriodicTimer timer = await ScheduledExecutions(stoppingToken);
         }
@@ -44,11 +36,11 @@ namespace PowerPosition.Worker
             {
                 try
                 {
-                    await _service.GenerateReportAsync(stoppingToken);
+                    await service.GenerateReportAsync(stoppingToken);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unexpected error during extract");
+                    logger.LogError(ex, "Unexpected error during extract");
                 }
             }
 
