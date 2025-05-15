@@ -20,7 +20,7 @@ public class PowerPositionService(
     private readonly string _outputFolder = EnsureDirectory(settings.Value.OutputFolder);
     private readonly TimeZoneInfo _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
     private readonly string _localTimeZoneId = settings.Value.LocalTimeZone;
-    private readonly int _retryDelayMs = settings.Value.RetryDelayMillisecods;
+    private readonly int _retryDelayMs = settings.Value.RetryDelayMilliseconds;
 
     /// <summary>
     /// Generates the power position report and writes it to a CSV file.

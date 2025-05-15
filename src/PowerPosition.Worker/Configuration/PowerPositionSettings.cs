@@ -7,5 +7,5 @@ public class PowerPositionSettings
     public string OutputFolder { get; set; } = string.Empty;
     public string LocalTimeZone { get; set; } = string.Empty;
     public int IntervalInMinutes { get; set; } = PowerPositionConstants.defaultIntervalInMinutes;
-    public int RetryDelayMillisecods { get; set; } = PowerPositionConstants.defaultDelayMiliseconds;
+    public int RetryDelayMilliseconds { get; set; } = PowerPositionConstants.defaultDelayMiliseconds;
 }
