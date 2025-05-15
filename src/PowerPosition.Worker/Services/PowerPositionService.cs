@@ -1,7 +1,6 @@
 ﻿using Axpo;
 using Microsoft.Extensions.Options;
 using PowerPosition.Worker.Configuration;
-using PowerPosition.Worker.Constants;
 using System.Text;
 
 namespace PowerPosition.Worker.Services;
@@ -21,6 +20,7 @@ public class PowerPositionService(
     private readonly string _outputFolder = EnsureDirectory(settings.Value.OutputFolder);
     private readonly TimeZoneInfo _localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(settings.Value.LocalTimeZone);
     private readonly string _localTimeZoneId = settings.Value.LocalTimeZone;
+    private readonly int _retryDelayMs = settings.Value.RetryDelayMillisecods;
 
     /// <summary>
     /// Generates the power position report and writes it to a CSV file.
@@ -29,12 +29,12 @@ public class PowerPositionService(
     {
         var utcNow = DateTime.UtcNow;
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, _localTimeZone);
+        var localReportDate = localNow.Date;
 
         logger.LogInformation(
-            "Generate report async at Utc: {UtcTime} ({LocalZone}: {LocalTime})",
-            utcNow, _localTimeZoneId, localNow);
+            "Generate Power Report request for date {localReportDate} started at Utc: {utcNow} ({LocalZone}: {LocalTime})",
+            localReportDate, utcNow, _localTimeZoneId, localNow);
 
-        var localReportDate = localNow.Date;
 
         IEnumerable<PowerTrade> trades;
         try
@@ -43,10 +43,10 @@ public class PowerPositionService(
             var aggregatedVolumes = AggregateVolumes(trades);
             await WriteCsvAsync(localNow, aggregatedVolumes, cancellationToken);
         }
-        catch (PowerServiceException ex)
+        catch (OperationCanceledException)
         {
-            logger.LogError(ex, "PowerService failed for date {ReportDate}. Message: {ErrorMessage}",
-                localReportDate, ex.Message);
+            logger.LogError("Power Report request canceled for date {ReportDate}",
+                localReportDate);
         }
     }
 
@@ -70,7 +70,7 @@ public class PowerPositionService(
     private async Task<IEnumerable<PowerTrade>> ResilientGetTradesAsync(DateTime date, CancellationToken cancellationToken)
     {
         int retryCount = 1;
-        while (retryCount <= PowerPositionConstants.maxGetTradesRetries && !cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
@@ -78,17 +78,14 @@ public class PowerPositionService(
             }
             catch (PowerServiceException ex)
             {
-                double retryDelayMs = PowerPositionConstants.retryDelayMiliseconds * Math.Pow(2, retryCount - 1);
-                logger.LogWarning(ex, "Retry {RetryCount} for PowerServiceException after {RetryDelayMs}ms. Message: {ErrorMessage}",
-                    retryCount, retryDelayMs, ex.Message);
-                await Task.Delay(TimeSpan.FromMilliseconds(retryDelayMs), cancellationToken);
+
+                logger.LogWarning(ex, "Retry {RetryCount} for Power Report request at date {date}. Message: {ErrorMessage}",
+                    retryCount, date, ex.Message);
+                await Task.Delay(TimeSpan.FromMilliseconds(_retryDelayMs), cancellationToken);
                 retryCount++;
             }
         }
-        string errorMessage = cancellationToken.IsCancellationRequested
-            ? "Operation canceled after multiple retry attempts"
-            : $"Max retries ({PowerPositionConstants.maxGetTradesRetries}) reached";
-        throw new PowerServiceException(errorMessage);
+        throw new OperationCanceledException(cancellationToken);
     }
 
     private async Task WriteCsvAsync(DateTime localNow, double[] volumes, CancellationToken cancellationToken)
@@ -100,7 +97,7 @@ public class PowerPositionService(
         await File.WriteAllTextAsync(filePath, csvContent, cancellationToken);
 
         logger.LogInformation(
-            "Extract completed, CSV written to {FilePath} at {UtcTime} (Local: {LocalTime})",
+            "Power Report Extract completed, CSV written to {FilePath} at {UtcTime} (Local: {LocalTime})",
             filePath, DateTime.UtcNow, TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _localTimeZone));
     }
 
